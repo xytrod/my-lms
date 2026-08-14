@@ -1,0 +1,10 @@
+compose.yaml
+.env
+go.mod
+go.sum
+.gocache-phase6
+.gocache-phase55
+.env.example
+frontend/FRONTEND_FILES_SUMMARY.docx
+frontend/FRONTEND_STUDY_GUIDE.docx
+.vscode/AGENTS.md
