@@ -1,0 +1,237 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: lms-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+    networks:
+      - backend
+
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: lms-rabbitmq
+    restart: unless-stopped
+
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+    networks:
+      - backend
+
+
+  user-service:
+    build:
+      context: .
+      dockerfile: ./user-service/Dockerfile
+
+    container_name: lms-user-service
+    restart: unless-stopped
+
+    environment:
+      USER_APP_PORT: "8080"
+
+      USER_DB_HOST: postgres
+      USER_DB_PORT: "5432"
+      USER_DB_USERNAME: postgres
+      USER_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      USER_DB_NAME: user-service
+
+      AUTH_USER_API_KEY: ${AUTH_USER_API_KEY}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - backend
+
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./auth-service/Dockerfile
+
+    container_name: lms-auth-service
+    restart: unless-stopped
+
+    environment:
+      AUTH_APP_PORT: "8081"
+
+      AUTH_JWT_ACCESS_TTL: "15m"
+      AUTH_JWT_REFRESH_TTL: "168h"
+
+      AUTH_DB_HOST: postgres
+      AUTH_DB_PORT: "5432"
+      AUTH_DB_USERNAME: postgres
+      AUTH_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      AUTH_DB_NAME: auth-service
+
+      AUTH_USER_URL: http://user-service:8080
+      AUTH_USER_API_KEY: ${AUTH_USER_API_KEY}
+
+      AUTH_JWT_ACCESS: ${AUTH_JWT_ACCESS}
+      AUTH_JWT_REFRESH: ${AUTH_JWT_REFRESH}
+
+      AUTH_USER_TIMEOUT: "5s"
+
+      JWT_ISSUER: auth-service
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      user-service:
+        condition: service_started
+
+    networks:
+      - backend
+
+
+  course-service:
+    build:
+      context: .
+      dockerfile: ./course-service/Dockerfile
+
+    container_name: lms-course-service
+    restart: unless-stopped
+
+    environment:
+      COURSE_APP_PORT: "8082"
+
+      COURSE_DB_HOST: postgres
+      COURSE_DB_PORT: "5432"
+      COURSE_DB_USERNAME: postgres
+      COURSE_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      COURSE_DB_NAME: course-service
+
+      COURSE_JWT_ACCESS: ${AUTH_JWT_ACCESS}
+      JWT_ISSUER: auth-service
+
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      rabbitmq:
+        condition: service_healthy
+
+    networks:
+      - backend
+
+
+  enrollment-service:
+    build:
+      context: .
+      dockerfile: ./enrollment_progress-service/Dockerfile
+
+    container_name: lms-enrollment-service
+    restart: unless-stopped
+
+    environment:
+      ENROLL_PROG_APP_PORT: "8083"
+
+      ENROLL_PROG_DB_HOST: postgres
+      ENROLL_PROG_DB_PORT: "5432"
+      ENROLL_PROG_DB_USERNAME: postgres
+      ENROLL_PROG_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      ENROLL_PROG_DB_NAME: enrollment_progress-service
+
+      ENROLL_PROG_ACCESS: ${AUTH_JWT_ACCESS}
+      JWT_ISSUER: auth-service
+
+      COURSE_ENROLL_SERVICE_URL: http://course-service:8082
+
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      rabbitmq:
+        condition: service_healthy
+
+      course-service:
+        condition: service_started
+
+    networks:
+      - backend
+
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./api-gateway/Dockerfile
+
+    container_name: lms-api-gateway
+    restart: unless-stopped
+
+    environment:
+      API_GATEWAY_PORT: "3000"
+
+      AUTH_SERVICE_URL: http://auth-service:8081
+      USER_SERVICE_URL: http://user-service:8080
+      COURSE_SERVICE_URL: http://course-service:8082
+      ENROLLMENT_PROG_SERVICE_URL: http://enrollment-service:8083
+
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    depends_on:
+      - auth-service
+      - user-service
+      - course-service
+      - enrollment-service
+
+    networks:
+      - backend
+
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+
+    container_name: lms-frontend
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:5173:80"
+
+    depends_on:
+      - api-gateway
+
+    networks:
+      - backend
+
+
+networks:
+  backend:
+    driver: bridge
+
+
+volumes:
+  postgres_data:
