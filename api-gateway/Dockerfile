@@ -15,5 +15,6 @@ FROM alpine:3.22
 WORKDIR /app
 
 COPY --from=builder /app/app .
+EXPOSE 3000
 
 CMD ["./app"]

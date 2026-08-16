@@ -11,6 +11,10 @@ services:
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - type: bind
+        source: /opt/lms/my-lms/postgres-init
+        target: /docker-entrypoint-initdb.d
+        read_only: true
 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
@@ -43,8 +47,8 @@ services:
 
   user-service:
     build:
-      context: .
-      dockerfile: ./user-service/Dockerfile
+      context: ./user-service
+      dockerfile: Dockerfile
 
     container_name: lms-user-service
     restart: unless-stopped
@@ -70,8 +74,8 @@ services:
 
   auth-service:
     build:
-      context: .
-      dockerfile: ./auth-service/Dockerfile
+      context: ./auth-service
+      dockerfile: Dockerfile
 
     container_name: lms-auth-service
     restart: unless-stopped
@@ -111,8 +115,8 @@ services:
 
   course-service:
     build:
-      context: .
-      dockerfile: ./course-service/Dockerfile
+      context: ./course-service
+      dockerfile: Dockerfile
 
     container_name: lms-course-service
     restart: unless-stopped
@@ -144,8 +148,8 @@ services:
 
   enrollment-service:
     build:
-      context: .
-      dockerfile: ./enrollment_progress-service/Dockerfile
+      context: ./enrollment_progress-service
+      dockerfile: Dockerfile
 
     container_name: lms-enrollment-service
     restart: unless-stopped
@@ -182,8 +186,8 @@ services:
 
   api-gateway:
     build:
-      context: .
-      dockerfile: ./api-gateway/Dockerfile
+      context: ./api-gateway
+      dockerfile: Dockerfile
 
     container_name: lms-api-gateway
     restart: unless-stopped

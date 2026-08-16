@@ -38,7 +38,7 @@ func (p *Proxy) Forward(baseURL string) fiber.Handler {
 			req.Header.Set(string(key), string(value))
 		})
 		requestID := requestid.FromContext(c)
-		if requestID == "" {
+		if requestID != "" {
 			req.Header.Set("X-Request-ID", requestID)
 		}
 		resp, err := p.client.Do(req)

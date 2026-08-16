@@ -1,7 +1,5 @@
 compose.yaml
 .env
-go.mod
-go.sum
 .gocache-phase6
 .gocache-phase55
 .env.example
